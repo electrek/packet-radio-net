@@ -159,7 +159,7 @@ void loop() {
 		strcpy(radiopacket,"B");
 	}
 
-  //Serial.print("Sending "); Serial.println(radiopacket);
+  Serial.print("Sending "); Serial.println(radiopacket);
   
 	for (int i=0; i<NUM_RX; i++)
 	{
