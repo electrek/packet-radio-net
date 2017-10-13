@@ -75,8 +75,8 @@ void setup()
   Serial.begin(115200);
   //while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
 
-  digitalPinToInterrupt(ENCODERPIN0); //on M0, Encoder library doesn't auto set these as interrupts
-  digitalPinToInterrupt(ENCODERPIN1);
+  digitalPinToInterrupt(ENCODER_KNOB_PIN1); //on M0, Encoder library doesn't auto set these as interrupts
+  digitalPinToInterrupt(ENCODER_KNOB_PIN2);
   
   oled.begin();    // Initialize the OLED
   oled.clear(ALL); // Clear the display's internal memory
