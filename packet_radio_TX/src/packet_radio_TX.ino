@@ -28,9 +28,10 @@
 MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS); // SPI declaration
 
 // Encoder definition
-#define ENCODERPIN0 5
-#define ENCODERPIN1 6
-Encoder knob(ENCODERPIN0, ENCODERPIN1);
+#define ENCODER_KNOB_PIN1 5
+#define ENCODER_KNOB_PIN2 6
+#define ENCODER_SWITCH_PIN 9 
+Encoder knob(ENCODER_KNOB_PIN1, ENCODER_KNOB_PIN2);
 
 /************ Radio Setup ***************/
 
