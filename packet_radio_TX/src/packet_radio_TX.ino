@@ -33,6 +33,8 @@ MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS); // SPI declaration
 #define ENCODER_SWITCH_PIN 9 
 Encoder knob(ENCODER_KNOB_PIN1, ENCODER_KNOB_PIN2);
 
+#define MENU_LENGTH 8
+
 /************ Radio Setup ***************/
 
 // Change to 434.0 or other frequency, must match RX's freq!
@@ -61,6 +63,12 @@ RH_RF69 rf69(RFM69_CS, RFM69_INT);
 // Class to manage message delivery and receipt, using the driver declared above
 RHReliableDatagram rf69_manager(rf69, MY_ADDRESS);
 
+int lastButton=17; //last button pressed for Trellis logic
+
+int menuList[8]={1,2,3,4,5,6,7,8}; //for rotary encoder choices
+int m = 0; //variable to increment through menu list
+int lastTB[8] = {16, 16, 16, 16, 16, 16, 16, 16}; //array to store per-menu Trellis button
+char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};
 
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 int16_t lastRSSI = 0;
@@ -68,7 +76,7 @@ int16_t lastRSSI = 0;
 #define VBATPIN A7
 #define HALLEFFECT A0
 float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
-float measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
+// float measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
 
 void setup() 
 {
@@ -118,50 +126,111 @@ void setup()
   uint8_t key[] = { 0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89,
                     0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
   rf69.setEncryptionKey(key);
+
+
   
   pinMode(LED, OUTPUT);
   pinMode(VBATPIN, INPUT);
 
   Serial.print("RFM69 radio @");  Serial.print((int)RF69_FREQ);  Serial.println(" MHz");
+
+  oled.setCursor(0,0);
+  oled.setFontType(0);
+  oled.println("RFM69 @ ");
+  oled.print((int)RF69_FREQ);
+  oled.println(" MHz");
+  oled.display();
+  delay(1200); //pause to let freq message be read by a human
+
+  oled.clear(PAGE);
+  oled.setCursor(0,0);
+  oled.setFontType(0);
+  oled.println("REMOTE FX");
+  oled.setCursor(0,16);
+  oled.println("TRIGGER");  
+  oled.display();
 }
 
 
 // Dont put this on the stack:
 uint8_t buf[RH_RF69_MAX_MESSAGE_LEN];
 uint8_t data[] = "  OK";
-long oldKnobPosition  = -999;
+long pos  = -999;
+long newPos = pos;
 char radiopacket[20] = "Hello World #";
 
-void loop() {
+void loop()
+{
   //delay(1000);  // Wait 1 second between transmits, could also 'sleep' here!
- long newKnobPosition = knob.read();
-  if (newKnobPosition != oldKnobPosition) {
-    oldKnobPosition = newKnobPosition;
-  //  Serial.println(newKnobPosition);
-  }
-  
-  measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
- // Serial.print("VBat: " );
-	Serial.print(measuredvbat);
-	Serial.print(" ");
-  measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
-//  Serial.print("HallEffect: " );
-	Serial.print(measuredhall);
-	Serial.print(" ");
-  strcpy(radiopacket,"Hello World #");
-  itoa(packetnum++, radiopacket+13, 10);
-  
-	if (measuredhall < 1.5)
-	{
-		strcpy(radiopacket,"A");
-	}
-	if (measuredhall > 3.5)
-	{
-		strcpy(radiopacket,"B");
-	}
 
-  Serial.print("Sending "); Serial.println(radiopacket);
   
+      /*************Rotary Encoder Menu***********/
+
+    //check the encoder knob, set the current position as origin
+    long newPos = knob.read() / 4;//divide for encoder detents
+    
+    /* // for debugging
+     Serial.print("pos=");
+     Serial.print(pos);
+     Serial.print(", newPos=");
+     Serial.println(newPos);
+    */
+
+    if(newPos != pos){
+      int diff = newPos - pos;//check the different between old and new position
+      if(diff>=1){
+        m++; 
+        m = (m+MENU_LENGTH) % MENU_LENGTH;//modulo to roll over the m variable through the list size
+       }
+
+      if(diff==-1){ //rotating backwards
+         m--;
+         m = (m+MENU_LENGTH) % MENU_LENGTH;
+       }
+       //uncomment for debugging or general curiosity
+      Serial.print("Diff = ");
+      Serial.print(diff);
+      Serial.print("  pos= ");
+      Serial.print(pos);
+      Serial.print(", newPos=");
+      Serial.println(newPos);
+      Serial.println(menuList[m]);
+      Serial.print("m is: ");
+      Serial.println(m);
+
+      pos = newPos;
+
+      //write to the display
+      oled.setCursor(5,3);
+      oled.clear(PAGE);
+      oled.rectFill(0, (m+1)*5, 3, 5);
+      //oled.circleFill(3,(m+1)*5,2);
+      oled.print(menuListStr[m]);
+      oled.display();
+    }
+
+  measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
+//  Serial.print("VBat: " );
+//	Serial.println(measuredvbat);
+//	Serial.print(" ");
+// measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
+//  Serial.print("HallEffect: " );
+//	Serial.print(measuredhall);
+//	Serial.print(" ");
+  strcpy(radiopacket,"Hello World #");
+//  itoa(packetnum++, radiopacket+13, 10);
+  
+//	if (measuredhall < 1.5)
+//	{
+//		strcpy(radiopacket,"A");
+//	}
+//	if (measuredhall > 3.5)
+//	{
+//		strcpy(radiopacket,"B");
+//	}
+
+//  Serial.print("Sending "); Serial.println(radiopacket);
+  /*
 	for (int i=0; i<NUM_RX; i++)
 	{
 	  // Send a message to the DESTINATION!
@@ -177,7 +246,7 @@ void loop() {
 			 // Serial.print("Got reply from #"); Serial.print(from);
 			 // Serial.print(" [RSSI :");
 			  lastRSSI = rf69.lastRssi();
-			  Serial.println(lastRSSI);
+	//		  Serial.println(lastRSSI);
 			  
 			 // Serial.print("] : ");
 			 // Serial.println((char*)buf);     
@@ -190,11 +259,11 @@ void loop() {
 		}
 		else
 		{
-			Serial.println("Sending failed (no ack)");
+	//		Serial.println("Sending failed (no ack)");
 			lastRSSI = 0;
 		}
-		update_page();
-	}
+//		update_page();
+	}  */
 }
 
 void Blink(byte PIN, byte DELAY_MS, byte loops) {
@@ -225,8 +294,8 @@ void update_page()
         oled.print(lastRSSI);
     }
 	oled.setCursor(0, 32);
-	oled.print("HALL: ");       // Print "HALL:"
-    oled.print(measuredhall);    // Print HallEffect reading
+//	oled.print("HALL: ");       // Print "HALL:"
+//    oled.print(measuredhall);    // Print HallEffect reading
     oled.display();
 }
 
