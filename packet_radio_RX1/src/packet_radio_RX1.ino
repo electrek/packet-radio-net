@@ -19,10 +19,10 @@
 // Create the motor shield object with the default I2C address
 // Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
 // Or, create it with a different I2C address (say for stacking)
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
+ Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
 
 // Select which 'port' M1, M2, M3 or M4. In this case, M1
-// Adafruit_DCMotor *myMotor = AFMS.getMotor(1);
+ Adafruit_DCMotor *myMotor = AFMS.getMotor(1);
 // You can also make another motor on port M2
 //Adafruit_DCMotor *myOtherMotor = AFMS.getMotor(2);
 
@@ -46,24 +46,27 @@ RH_RF69 rf69(RFM69_CS, RFM69_INT);
 // Class to manage message delivery and receipt, using the driver declared above
 RHReliableDatagram rf69_manager(rf69, MY_ADDRESS);
 
-
 int16_t packetnum = 0;  // packet counter, we increment per xmission
+#define VBATPIN A7
+float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 
 void setup() 
 {
-	Serial.begin(115200);
+	Serial.begin(9600);
 	//while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
 
-//	AFMS.begin();  // create with the default frequency 1.6KHz
+	AFMS.begin();  // create with the default frequency 1.6KHz
 	//AFMS.begin(1000);  // OR with a different frequency, say 1KHz
   
   // Set the speed to start, from 0 (off) to 255 (max speed)
-//	myMotor->setSpeed(255);
+	myMotor->setSpeed(255);
 	
-//	myMotor->run(BACKWARD);
-//	delay(8000);
-//	myMotor->run(FORWARD);
-//	delay(8000);
+	myMotor->run(BACKWARD);  //open drawer
+	Serial.println("Open drawer");
+	delay(8000);
+	myMotor->run(FORWARD);	//close drawer
+	Serial.println("Close drawer");
+	delay(8000);
 
   
 	pinMode(LED, OUTPUT);     
@@ -104,66 +107,86 @@ void setup()
   Serial.print("RFM69 radio @");  Serial.print((int)RF69_FREQ);  Serial.println(" MHz");
 }
 
+unsigned long ul_1secIntervalMillis = 1000UL;  //1 sec interval
+unsigned long ul_PreviousMillis = millis();
 
 // Dont put this on the stack:
 uint8_t data[] = "And hello back to you";
 // Dont put this on the stack:
 uint8_t buf[RH_RF69_MAX_MESSAGE_LEN];
 
-void loop() {
-  if (rf69_manager.available())
-  {
-	// Wait for a message addressed to us from the client
-    uint8_t len = sizeof(buf);
-    uint8_t from;
-    if (rf69_manager.recvfromAck(buf, &len, &from)) {
-		buf[len] = 0; // zero out remaining string
+void loop()
+{
+	checkbatt();
+	
+	if (rf69_manager.available())
+  	{
+		// Wait for a message addressed to us from the client
+    	uint8_t len = sizeof(buf);
+    	uint8_t from;
+		if (rf69_manager.recvfromAck(buf, &len, &from))
+		{
+			buf[len] = 0; // zero out remaining string
       
-		Serial.print("Got packet from #"); Serial.print(from);
-		Serial.print(" [RSSI :");
-		Serial.print(rf69.lastRssi());
-		Serial.print("] : ");
-		Serial.println((char*)buf);
-		Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+			Serial.print("Got packet from #"); Serial.print(from);
+			Serial.print(" [RSSI :");
+			Serial.print(rf69.lastRssi());
+			Serial.print("] : ");
+			Serial.println((char*)buf);
+			Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
 
 		// Check to see what command was sent
-		switch(buf[0])
-		{
-			case 'A' :
-				Serial.println("case A");
-				//do something for command "A"
-	//			myMotor->run(BACKWARD);
-	//			delay(8000);
-				break;
-			case 'B' :
-				Serial.println("case B");
-				//do something for command "B"
-	//			myMotor->run(FORWARD);
-	//			delay(8000);
-				break;
-			case 'C' :
-				//do something for command "C"
-				break;
-			default:
-				Serial.println("default");
-				// do the default
-				break;
-		}
+			switch(buf[0])
+			{
+				case 'A' :
+					Serial.println("case A");
+					//do something for command "A"
+					myMotor->run(BACKWARD);  //open drawer
+					delay(8000);
+					break;
+				case 'B' :
+					Serial.println("case B");
+					//do something for command "B"
+					myMotor->run(FORWARD);   //close drawer
+					delay(8000);
+					break;
+				case 'C' :
+					//do something for command "C"
+					break;
+				default:
+					Serial.println("default");
+					// do the default
+					break;
+			}
 		
 
-		// Send a reply back to the originator client
-		if (!rf69_manager.sendtoWait(data, sizeof(data), from))
-			Serial.println("Sending failed (no ack)");
-    }
-  }
+			// Send a reply back to the originator client
+			if (!rf69_manager.sendtoWait(data, sizeof(data), from))
+				Serial.println("Sending failed (no ack)");
+		}
+	}
 }
 
 
-void Blink(byte PIN, byte DELAY_MS, byte loops) {
-  for (byte i=0; i<loops; i++)  {
-    digitalWrite(PIN,HIGH);
-    delay(DELAY_MS);
-    digitalWrite(PIN,LOW);
-    delay(DELAY_MS);
-  }
+void Blink(byte PIN, byte DELAY_MS, byte loops)
+{
+	for (byte i=0; i<loops; i++)
+  	{
+		digitalWrite(PIN,HIGH);
+		delay(DELAY_MS);
+		digitalWrite(PIN,LOW);
+		delay(DELAY_MS);
+  	}
+}
+
+void checkbatt()
+{
+	unsigned long ul_CurrentMillis = millis();
+	if ((ul_CurrentMillis - ul_PreviousMillis > ul_1secIntervalMillis))
+	{
+		measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
+		Serial.print("VBat: " );
+		Serial.println(measuredvbat);
+	ul_PreviousMillis = ul_CurrentMillis;
+	}
 }

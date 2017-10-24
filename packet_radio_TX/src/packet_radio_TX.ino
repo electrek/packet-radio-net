@@ -37,6 +37,7 @@ Encoder knob(ENCODER_KNOB_PIN1, ENCODER_KNOB_PIN2);
 
 /************ Radio Setup ***************/
 
+
 // Change to 434.0 or other frequency, must match RX's freq!
 #define RF69_FREQ 915.0
 
