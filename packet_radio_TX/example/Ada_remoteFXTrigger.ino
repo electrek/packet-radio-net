@@ -126,7 +126,7 @@ void setup() {
   pinMode(INTPIN, INPUT);
   digitalWrite(INTPIN, HIGH);
   trellis.begin(0x70);  
-
+ 
   pinMode(PIN_ENCODER_SWITCH, INPUT_PULLUP);//set encoder push switch pin to input pullup
   
   digitalPinToInterrupt(10); //on M0, Encoder library doesn't auto set these as interrupts
