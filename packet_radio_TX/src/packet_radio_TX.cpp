@@ -56,18 +56,18 @@ Adafruit_SSD1306 oled = Adafruit_SSD1306();
 #define RF69_FREQ 915.0
 
 // change addresses for each client board, any number :)
-#define MY_ADDRESS 0
-#define RX1_ADDRESS 1
-#define RX2_ADDRESS 2
-#define RX3_ADDRESS 3
-#define RX4_ADDRESS 4
+#define MY_ADDRESS 1
+#define Radio_ADDRESS 1
+#define Chessboard_ADDRESS 2
+#define DeskDrawer_ADDRESS 3
+#define Lights_ADDRESS 4
 #define RX5_ADDRESS 5
 #define RX6_ADDRESS 6
 #define RX7_ADDRESS 7
 #define RX8_ADDRESS 8
 #define NUM_RX 8
 
-uint8_t rxAddresses[] = {RX1_ADDRESS,RX2_ADDRESS,RX3_ADDRESS,RX4_ADDRESS,RX5_ADDRESS,RX6_ADDRESS,RX7_ADDRESS,RX8_ADDRESS};
+uint8_t rxAddresses[] = {Radio_ADDRESS,Chessboard_ADDRESS,DeskDrawer_ADDRESS,Lights_ADDRESS,RX5_ADDRESS,RX6_ADDRESS,RX7_ADDRESS,RX8_ADDRESS};
 
 
 #if defined(ARDUINO_SAMD_FEATHER_M0) // Feather M0 w/Radio
@@ -372,16 +372,18 @@ void loop()
 
           Serial.print("Sending "); 
           Serial.println(radiopacket[0]);
+          Serial.print("to ");
+          Serial.println(rxAddresses[m]);
 
-          rf69.send((uint8_t *)radiopacket, strlen(radiopacket));
-          rf69.waitPacketSent(); 
+      //  rf69.send((uint8_t *)radiopacket, strlen(radiopacket));
+      //  rf69.waitPacketSent(); 
           //reset packet so unassigned buttons don't send last command
-          radiopacket[0]='z'; //also being used to turn off NeoPixels 
+      //    radiopacket[0]='z'; //also being used to turn off NeoPixels 
           //from any unused button
 
           
           // Send a message to the DESTINATION!
-            if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), rxAddresses[ikeys]))
+            if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), rxAddresses[m]))
             {
               // Now wait for a reply from the server
               uint8_t len = sizeof(buf);
