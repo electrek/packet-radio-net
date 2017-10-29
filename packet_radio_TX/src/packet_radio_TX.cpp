@@ -8,6 +8,7 @@
 // Demonstrates the use of AES encryption, setting the frequency and modem 
 // configuration
 
+#include <Arduino.h>
 #include <SPI.h>
 #include <RH_RF69.h>
 #include <RHReliableDatagram.h>
@@ -15,6 +16,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "Adafruit_Trellis.h"
+
+void update_page();
+void Blink(byte PIN, byte DELAY_MS, byte loops);
 
 /********* Encoder Setup ***************/
 #define PIN_ENCODER_SWITCH 11
