@@ -55,9 +55,15 @@ Adafruit_SSD1306 oled = Adafruit_SSD1306();
 #define MY_ADDRESS 0
 #define RX1_ADDRESS 1
 #define RX2_ADDRESS 2
-#define NUM_RX 2
+#define RX3_ADDRESS 3
+#define RX4_ADDRESS 4
+#define RX5_ADDRESS 5
+#define RX6_ADDRESS 6
+#define RX7_ADDRESS 7
+#define RX8_ADDRESS 8
+#define NUM_RX 8
 
-uint8_t rxAddresses[] = {RX1_ADDRESS,RX2_ADDRESS};
+uint8_t rxAddresses[] = {RX1_ADDRESS,RX2_ADDRESS,RX3_ADDRESS,RX4_ADDRESS,RX5_ADDRESS,RX6_ADDRESS,RX7_ADDRESS,RX8_ADDRESS};
 
 
 #if defined(ARDUINO_SAMD_FEATHER_M0) // Feather M0 w/Radio
@@ -79,8 +85,23 @@ int lastButton=17; //last button pressed for Trellis logic
 int menuList[8]={1,2,3,4,5,6,7,8}; //for rotary encoder choices
 int m = 0; //variable to increment through menu list
 int lastTB[8] = {16, 16, 16, 16, 16, 16, 16, 16}; //array to store per-menu Trellis button
-char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};
-
+char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
+char* menuSubListStr[8][16] = {{"ON", "OFF", "FORWARD", "REVERSE", "PAUSE", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"Queen Activate", "Knight Activate", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"OPEN", "CLOSE", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""}};
+char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'F', 'G', 'H', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'I', 'J', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'K', 'L', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'M', 'N', 'O', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'P', 'Q', 'R', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'S', 'T', 'U', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                          {'V', 'W', 'X', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 int16_t lastRSSI = 0;
 
@@ -92,7 +113,7 @@ float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 void setup() 
 {
   Serial.begin(115200);
-  //while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
+ // while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
  
   // INT pin on Trellis requires a pullup
  pinMode(INTPIN, INPUT);
@@ -287,247 +308,118 @@ void loop()
   {
     if (trellis.readSwitches())
     { // If a button was just pressed or released...
-      for (uint8_t i=0; i<numKeys; i++)
+      for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
       { // go through every button
-        if (trellis.justPressed(i)) 
+        if (trellis.justPressed(ikeys)) 
         { // if it was pressed, turn it on
         //Serial.print("v"); Serial.println(i);
-          trellis.setLED(i);
+          trellis.setLED(ikeys);
         } 
-        if (trellis.justReleased(i))
+        if (trellis.justReleased(ikeys))
         { // if it was released, turn it off
           //Serial.print("^"); Serial.println(i);
-          trellis.clrLED(i);
+          trellis.clrLED(ikeys);
         }
       }
       trellis.writeDisplay(); // tell the trellis to set the LEDs we requested
     }
   }
 
-if (MODE == LATCHING)
-{
-  if (trellis.readSwitches()) { // If a button was just pressed or released...
-    for (uint8_t i=0; i<numKeys; i++) { // go through every button
-      if (trellis.justPressed(i)) { // if it was pressed...
-      //Serial.print("v"); Serial.println(i);
+  if (MODE == LATCHING)
+  {
+    if (trellis.readSwitches())
+    { // If a button was just pressed or released...
+      for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
+      { // go through every button
+        if (trellis.justPressed(ikeys))
+        { // if it was pressed...
+        //Serial.print("v"); Serial.println(ikeys);
 
-      // Alternate the LED unless the same button is pressed again
-      //if(i!=lastButton){
-      if(i!=lastTB[m]){ 
-        if (trellis.isLED(i)){
-            trellis.clrLED(i);
-            lastTB[m]=i; //set the stored value for menu changes
-        }
-        else{
-          trellis.setLED(i);
-          //trellis.clrLED(lastButton);//turn off last one
-          trellis.clrLED(lastTB[m]);
-          lastTB[m]=i; //set the stored value for menu changes
-        }
-        trellis.writeDisplay();
-      }
-          char radiopacket[20];
+        // Alternate the LED unless the same button is pressed again
+        //if(ikeys!=lastButton){
+          if(ikeys!=lastTB[m])
+          { 
+            if (trellis.isLED(ikeys))
+            {
+                trellis.clrLED(ikeys);
+                lastTB[m]=ikeys; //set the stored value for menu changes
+            }
+            else
+            {
+              trellis.setLED(ikeys);
+              //trellis.clrLED(lastButton);//turn off last one
+              trellis.clrLED(lastTB[m]);
+              lastTB[m]=ikeys; //set the stored value for menu changes
+            }
+            trellis.writeDisplay();
+          }
+              char radiopacket[20];
+              
+
+          //check the rotary encoder menu choice
+      
+          radiopacket[0] = menuCmdStr[m][ikeys];
+          oled.clearDisplay();
+          oled.setCursor(0,0);
+          oled.print(menuListStr[m]);
+          oled.setCursor(0,16);
+          oled.print(menuSubListStr[m][ikeys]);
+          oled.display();  
+
+          Serial.print("Sending "); 
+          Serial.println(radiopacket[0]);
+
+          rf69.send((uint8_t *)radiopacket, strlen(radiopacket));
+          rf69.waitPacketSent(); 
+          //reset packet so unassigned buttons don't send last command
+          radiopacket[0]='z'; //also being used to turn off NeoPixels 
+          //from any unused button
+
           
-      /**************SHARKS**************/
-      //check the rotary encoder menu choice
-      if(m==0){//first menu item
-          if (i==0){ //button 0 sends button A command
-            radiopacket[0] = 'A';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Sharks");
-            oled.setCursor(0,16);
-            oled.print("Kill....ON");
-            oled.display();  
-          }
-          if (i==1){ //button 1 sends button B command
-            radiopacket[0] = 'B';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Sharks");
-            oled.setCursor(0,16);
-            oled.print("Kill...OFF");
-            oled.display(); 
-          }
-          if (i==4){ //
-            radiopacket[0] = 'C';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Sharks");
-            oled.setCursor(0,16);
-            oled.print("Sleep....ON");
-            oled.display(); 
-          } 
-          if (i==5){ //
-            radiopacket[0] = 'D';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Sharks");
-            oled.setCursor(0,16);
-            oled.print("Sleep...OFF");
-            oled.display(); 
-          } 
-      }
-      /**************NeoPixels**************/
-      if(m==1){//next menu item
-          if (i==0){ //button 0 sends button A command
-            radiopacket[0] = 'E';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("NeoPixels");
-            oled.setCursor(75,16);
-            oled.print("RED");
-            oled.display(); 
-          }
-          if (i==1){ //button 1 sends button B command
-            radiopacket[0] = 'F';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("NeoPixels");
-            oled.setCursor(70,16);
-            oled.print("GREEN");
-            oled.display(); 
-          }
-          if (i==2){ //button 4 sends button C command
-            radiopacket[0] = 'G';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("NeoPixels");
-            oled.setCursor(75,16);
-            oled.print("BLUE");
-            oled.display();  
-          } 
-
-          if(i>=3 && i<=15){
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("NeoPixels");
-            oled.display();  
-          }  
-      }
-      /**************Motor Props**************/
-      if(m==2){//next menu item
-          if (i==0){ //button 0 sends button D command CARD UP
-            radiopacket[0] = 'H';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Motors");
-            oled.setCursor(0,16);
-            oled.print("Card....UP");
-            oled.display();   
-          }
-          if (i==1){ //button 1 sends button E command CARD DOWN
-            radiopacket[0] = 'I';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Motors");
-            oled.setCursor(0,16);
-            oled.print("Card..DOWN");
-            oled.display();
-          }
-          if (i==4){ //button 4 sends button F command PUMP RUN temp
-            radiopacket[0] = 'J';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Motors");
-            oled.setCursor(0,16);
-            oled.print("Pump...RUN");
-            oled.display(); 
-          }
-          if(i>=5 && i<=15){
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Motors");
-
-            oled.display();  
-          }   
-      }
-      /**************Lamps**************/
-      if(m==3){//next menu item
-          if (i==0){ 
-            radiopacket[0] = 'K';
-          oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Lamp");
-            oled.setCursor(0,16);
-            oled.print("Spot1...ON");
-            oled.display();   
-          }
-          if (i==1){ 
-            radiopacket[0] = 'L';
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Lamp");
-            oled.setCursor(0,16);
-            oled.print("Spot1..Off");
-            oled.display();   
-          }
-          if(i>=2 && i<=15){
-            oled.clearDisplay();
-            oled.setCursor(0,0);
-            oled.print("Lamp");
-            oled.display();  
-          }   
-      }
-
-    strcpy(radiopacket,"Hello World #");
-  //  itoa(packetnum++, radiopacket+13, 10);
-    
-  //	if (measuredhall < 1.5)
-  //	{
-  //		strcpy(radiopacket,"A");
-  //	}
-  //	if (measuredhall > 3.5)
-  //	{
-  //		strcpy(radiopacket,"B");
-  //	}
-
-  //  Serial.print("Sending "); Serial.println(radiopacket);
-    /*
-    for (int i=0; i<NUM_RX; i++)
-    {
-      // Send a message to the DESTINATION!
-      if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), rxAddresses[i]))
-      {
-        // Now wait for a reply from the server
-        uint8_t len = sizeof(buf);
-        uint8_t from;   
-        if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
-        {
-          buf[len] = 0; // zero out remaining string
-        
-        // Serial.print("Got reply from #"); Serial.print(from);
-        // Serial.print(" [RSSI :");
-          lastRSSI = rf69.lastRssi();
-    //		  Serial.println(lastRSSI);
-          
-        // Serial.print("] : ");
-        // Serial.println((char*)buf);     
-          Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+          // Send a message to the DESTINATION!
+            if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), rxAddresses[ikeys]))
+            {
+              // Now wait for a reply from the server
+              uint8_t len = sizeof(buf);
+              uint8_t from;   
+              if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
+              {
+                buf[len] = 0; // zero out remaining string
+              
+                Serial.print("Got reply from #"); Serial.print(from);
+                Serial.print(" [RSSI :");
+                lastRSSI = rf69.lastRssi();
+          	    Serial.println(lastRSSI);
+                
+              // Serial.print("] : ");
+              // Serial.println((char*)buf);     
+                Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+              }
+              else
+              {
+                Serial.println("No reply, is anyone listening?");
+              }
+            }
+            else
+            {
+          		Serial.println("Sending failed (no ack)");
+              lastRSSI = 0;
+            }
+      //		update_page();
+           
         }
-        else
-        {
-          Serial.println("No reply, is anyone listening?");
-        }
-      }
-      else
-      {
-    //		Serial.println("Sending failed (no ack)");
-        lastRSSI = 0;
-      }
-  //		update_page();
-    }  */
-          }
-        }
-  // tell the trellis to set the LEDs we requested
-        trellis.writeDisplay();
+    }
+      // tell the trellis to set the LEDs we requested
+      trellis.writeDisplay();
     }
   }
 }
 
 
-void Blink(byte PIN, byte DELAY_MS, byte loops) {
-  for (byte i=0; i<loops; i++)  {
+void Blink(byte PIN, byte DELAY_MS, byte loops)
+{
+  for (byte i=0; i<loops; i++)
+  {
     digitalWrite(PIN,HIGH);
     delay(DELAY_MS);
     digitalWrite(PIN,LOW);
