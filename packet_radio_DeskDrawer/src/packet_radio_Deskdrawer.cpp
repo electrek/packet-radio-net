@@ -133,23 +133,23 @@ void loop()
 			buf[len] = 0; // zero out remaining string
       
 			Serial.print("Got packet from #"); Serial.print(from);
-			Serial.print(" [RSSI :");
+			Serial.print(" [RSSI : ");
 			Serial.print(rf69.lastRssi());
 			Serial.print("] : ");
-			Serial.println((char*)buf);
+			Serial.println(buf[0]);
 			Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
 
 		// Check to see what command was sent
 			switch(buf[0])
 			{
-				case 'A' :
-					Serial.println("case A");
+				case 'I' :
+					Serial.println("case I, Open drawer");
 					//do something for command "A"
 					myMotor->run(BACKWARD);  //open drawer
 					delay(8000);
 					break;
-				case 'B' :
-					Serial.println("case B");
+				case 'J' :
+					Serial.println("case J, Close drawer");
 					//do something for command "B"
 					myMotor->run(FORWARD);   //close drawer
 					delay(8000);
