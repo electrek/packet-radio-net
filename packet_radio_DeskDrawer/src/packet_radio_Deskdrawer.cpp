@@ -18,12 +18,29 @@
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
 void Blink(byte PIN, byte DELAY_MS, byte loops);
-void checkbatt();
+void secondTick();
+void runActuatorCheck();
+
+// Actions
+#define IDLE 0
+#define CLOSING 1
+#define OPENING 2
+// States
+#define UNKNOWN 0
+#define CLOSED 1
+#define OPEN 2
+
+uint8_t actuatorAction = IDLE;
+uint8_t actuatorCount = 0;
+uint8_t actuatorState = UNKNOWN;
+
+char* actuatorActionStr[8] = {"IDLE", "CLOSING", "OPENING"};
+char* actuatorStateStr[8] = {"UNKNOWN", "CLOSED", "OPEN"};
 
 // Create the motor shield object with the default I2C address
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
 // Or, create it with a different I2C address (say for stacking)
- Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
+// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
 
 // Select which 'port' M1, M2, M3 or M4. In this case, M1
  Adafruit_DCMotor *myMotor = AFMS.getMotor(1);
@@ -56,7 +73,7 @@ float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 
 void setup() 
 {
-	Serial.begin(9600);
+	Serial.begin(115200);
 	//while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
 
 	AFMS.begin();  // create with the default frequency 1.6KHz
@@ -65,12 +82,14 @@ void setup()
   // Set the speed to start, from 0 (off) to 255 (max speed)
 	myMotor->setSpeed(255);
 	
-	myMotor->run(BACKWARD);  //open drawer
-	Serial.println("Open drawer");
-	delay(8000);
-	myMotor->run(FORWARD);	//close drawer
-	Serial.println("Close drawer");
-	delay(8000);
+//	myMotor->run(BACKWARD);  //open drawer
+//	Serial.println("Open drawer");
+//	delay(8000);
+//	myMotor->run(RELEASE);
+//	myMotor->run(FORWARD);	//close drawer
+//	Serial.println("Close drawer");
+//	delay(8000);
+//	myMotor->run(RELEASE);
 
   
 	pinMode(LED, OUTPUT);     
@@ -121,7 +140,7 @@ uint8_t buf[RH_RF69_MAX_MESSAGE_LEN];
 
 void loop()
 {
-	checkbatt();
+	secondTick();
 	
 	if (rf69_manager.available())
   	{
@@ -146,13 +165,21 @@ void loop()
 					Serial.println("case I, Open drawer");
 					//do something for command "A"
 					myMotor->run(BACKWARD);  //open drawer
-					delay(8000);
+					actuatorAction = OPENING;
+					actuatorState = UNKNOWN;
+					actuatorCount = 8;
+					//delay(8000);
+					//myMotor->run(RELEASE);
 					break;
 				case 'J' :
 					Serial.println("case J, Close drawer");
 					//do something for command "B"
 					myMotor->run(FORWARD);   //close drawer
-					delay(8000);
+					actuatorAction = CLOSING;
+					actuatorState = UNKNOWN;
+					actuatorCount = 8;
+					//delay(8000);
+					//myMotor->run(RELEASE);
 					break;
 				case 'C' :
 					//do something for command "C"
@@ -183,14 +210,40 @@ void Blink(byte PIN, byte DELAY_MS, byte loops)
   	}
 }
 
-void checkbatt()
+void secondTick()
 {
 	unsigned long ul_CurrentMillis = millis();
-	if ((ul_CurrentMillis - ul_PreviousMillis > ul_1secIntervalMillis))
+	if ((ul_CurrentMillis - ul_PreviousMillis >= ul_1secIntervalMillis))
 	{
+		runActuatorCheck();
 		measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 		Serial.print("VBat: " );
 		Serial.println(measuredvbat);
-	ul_PreviousMillis = ul_CurrentMillis;
+		ul_PreviousMillis = ul_CurrentMillis;
+	}
+}
+
+void runActuatorCheck()
+{
+	Serial.print("Actuator State is ");
+	Serial.println(actuatorStateStr[actuatorState]);
+	Serial.print("Actuator Action is ");
+	Serial.println(actuatorActionStr[actuatorAction]);
+	if (actuatorAction != IDLE)  // actuator is either OPENING or CLOSING
+	{
+		actuatorCount--;
+		if (actuatorCount==0)
+		{
+			if (actuatorAction==CLOSING)  // if closing completed, actuator state is closed
+				{
+					actuatorState = CLOSED;
+				}
+				if (actuatorAction==OPENING)  // if closing completed, actuator state is closed
+				{
+					actuatorState = OPEN;
+				}
+			actuatorAction = IDLE;
+			myMotor->run(RELEASE);
+		}
 	}
 }
