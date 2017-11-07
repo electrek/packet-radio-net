@@ -392,7 +392,8 @@ void loop()
               {
                 buf[len] = 0; // zero out remaining string
               
-                Serial.print("Got reply from #"); Serial.print(from);
+                Serial.print("Got reply from #"); Serial.println(from);
+                Serial.print("Reply:"); Serial.println((char*)buf);
                 Serial.print(" [RSSI :");
                 lastRSSI = rf69.lastRssi();
           	    Serial.println(lastRSSI);
