@@ -19,10 +19,18 @@
 
 void update_page();
 void Blink(byte PIN, byte DELAY_MS, byte loops);
+void sendMsg(char* radiopacket, uint8_t address);
+void checkMsg();
+void int0();
+void int1();
 
 /********* Encoder Setup ***************/
 #define PIN_ENCODER_SWITCH 11
-Encoder knob(10, 12);
+
+//digitalPinToInterrupt(10); //on M0, Encoder library doesn't auto set these as interrupts
+//digitalPinToInterrupt(12);
+
+//Encoder knob(10, 12);
 uint8_t activeRow = 0;
 long pos = -999;
 long newpos;
@@ -69,13 +77,28 @@ Adafruit_SSD1306 oled = Adafruit_SSD1306();
 
 uint8_t rxAddresses[] = {Radio_ADDRESS,Chessboard_ADDRESS,DeskDrawer_ADDRESS,Lights_ADDRESS,RX5_ADDRESS,RX6_ADDRESS,RX7_ADDRESS,RX8_ADDRESS};
 
-
 #if defined(ARDUINO_SAMD_FEATHER_M0) // Feather M0 w/Radio
   #define RFM69_CS      8
   #define RFM69_INT     3
   #define RFM69_RST     4
   #define LED           13
 #endif
+
+// Set up variables for rotary decoder
+volatile unsigned long threshold = 00000;
+// 'rotaryHalfSteps' is the counter of half-steps. The actual
+// number of steps will be equal to rotaryHalfSteps / 2
+//
+volatile long rotaryHalfSteps = 0;
+
+// Working variables for the interrupt routines
+//
+volatile unsigned long int0time = 0;
+volatile unsigned long int1time = 0;
+volatile boolean int0signal = false;
+volatile boolean int1signal = false;
+volatile boolean int0history = false;
+volatile boolean int1history = false;
 
 
 // Singleton instance of the radio driver
@@ -89,23 +112,23 @@ int lastButton=17; //last button pressed for Trellis logic
 int menuList[8]={1,2,3,4,5,6,7,8}; //for rotary encoder choices
 int m = 0; //variable to increment through menu list
 int lastTB[8] = {16, 16, 16, 16, 16, 16, 16, 16}; //array to store per-menu Trellis button
-char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
-char* menuSubListStr[8][16] = {{"ON", "OFF", "FORWARD", "REVERSE", "PAUSE", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"Queen Activate", "Knight Activate", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"OPEN", "CLOSE", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                              {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""}};
-char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'F', 'G', 'H', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'I', 'J', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'K', 'L', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'M', 'N', 'O', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'P', 'Q', 'R', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'S', 'T', 'U', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                          {'V', 'W', 'X', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
+const char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
+const char* menuSubListStr[8][16] =  {{"ON", "OFF", "FORWARD", "REVERSE", "PAUSE", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Queen Activate", "Knight Activate", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"OPEN", "CLOSE", "STOP", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""}};
+const char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'F', 'G', 'H', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'I', 'J', 'K', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'K', 'L', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'M', 'N', 'O', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'P', 'Q', 'R', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'S', 'T', 'U', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'V', 'W', 'X', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 int16_t lastRSSI = 0;
 
@@ -126,9 +149,13 @@ void setup()
 
  pinMode(PIN_ENCODER_SWITCH, INPUT_PULLUP);//set encoder push switch pin to input pullup
  
- digitalPinToInterrupt(10); //on M0, Encoder library doesn't auto set these as interrupts
- digitalPinToInterrupt(12);
- 
+  // Rotary decoder pin setup
+  pinMode(10, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
+
+  attachInterrupt(10, int0, CHANGE);
+  attachInterrupt(12, int1, CHANGE);
+
  // Initialize OLED display
   oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
   oled.setTextWrap(false);
@@ -213,20 +240,18 @@ char radiopacket[20] = "Hello World #";
 void loop()
 {
   delay(30); // 30ms delay is required, dont remove me! (Trellis)
-  //delay(1000);  // Wait 1 second between transmits, could also 'sleep' here!
-
-  
       /*************Rotary Encoder Menu***********/
 
     //check the encoder knob, set the current position as origin
-    long newPos = knob.read() / 4;//divide for encoder detents
-    
-    /* // for debugging
-     Serial.print("pos=");
-     Serial.print(pos);
-     Serial.print(", newPos=");
-     Serial.println(newPos);
-    */
+    //long newPos = knob.read() / 4;//divide for encoder detents --> this is used with Encoder lib
+
+    long newPos = rotaryHalfSteps / 2;
+    #ifdef DEBUG
+      Serial.print("pos=");
+      Serial.print(pos);
+      Serial.print(", newPos=");
+      Serial.println(newPos);
+    #endif
 
     if(newPos != pos)
     {
@@ -242,7 +267,7 @@ void loop()
          m--;
          m = (m+MENU_LENGTH) % MENU_LENGTH;
       }
-      /* //uncomment for debugging or general curiosity
+      #ifdef DEBUG
       Serial.print("Diff = ");
       Serial.print(diff);
       Serial.print("  pos= ");
@@ -252,7 +277,7 @@ void loop()
       Serial.println(menuList[m]);
       Serial.print("m is: ");
       Serial.println(m);
-      */
+      #endif
 
       pos = newPos;
 
@@ -357,6 +382,11 @@ void loop()
             }
             trellis.writeDisplay();
           }
+
+         checkMsg();
+
+
+
               char radiopacket[20];
               
 
@@ -381,37 +411,8 @@ void loop()
       //    radiopacket[0]='z'; //also being used to turn off NeoPixels 
           //from any unused button
 
-          
-          // Send a message to the DESTINATION!
-            if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), rxAddresses[m]))
-            {
-              // Now wait for a reply from the server
-              uint8_t len = sizeof(buf);
-              uint8_t from;   
-              if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
-              {
-                buf[len] = 0; // zero out remaining string
-              
-                Serial.print("Got reply from #"); Serial.println(from);
-                Serial.print("Reply:"); Serial.println((char*)buf);
-                Serial.print(" [RSSI :");
-                lastRSSI = rf69.lastRssi();
-          	    Serial.println(lastRSSI);
-                
-              // Serial.print("] : ");
-              // Serial.println((char*)buf);     
-                Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
-              }
-              else
-              {
-                Serial.println("No reply, is anyone listening?");
-              }
-            }
-            else
-            {
-          		Serial.println("Sending failed (no ack)");
-              lastRSSI = 0;
-            }
+      sendMsg(radiopacket,rxAddresses[m]);
+
       //		update_page();
            
         }
@@ -458,4 +459,88 @@ void update_page()
     oled.display();
 }
 
+void sendMsg(char* radiopacket, uint8_t address)
+{
+  // Send a message to the DESTINATION!
+  if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), address))
+  {
+    // Now wait for a reply from the server
+    uint8_t len = sizeof(buf);
+    uint8_t from;   
+    if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
+    {
+      buf[len] = 0; // zero out remaining string
+    
+      Serial.print("Got reply from #"); Serial.println(from);
+      Serial.print("Reply:"); Serial.println((char*)buf);
+      Serial.print(" [RSSI :");
+      lastRSSI = rf69.lastRssi();
+      Serial.println(lastRSSI);
+      
+    // Serial.print("] : ");
+    // Serial.println((char*)buf);     
+      Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+    }
+    else
+    {
+      Serial.println("No reply, is anyone listening?");
+    }
+  }
+  else
+  {
+    Serial.println("Sending failed (no ack)");
+    lastRSSI = 0;
+  }
+}
 
+void checkMsg()
+{
+  if (rf69_manager.available())
+  {
+   // Wait for a message addressed to us from the client
+   uint8_t len = sizeof(buf);
+   uint8_t from;
+   if (rf69_manager.recvfromAck(buf, &len, &from))
+   {
+     buf[len] = 0;
+     Serial.print("got request from : 0x");
+     Serial.print(from, HEX);
+     Serial.print(": ");
+     Serial.println((char*)buf);
+     Serial.print("RSSI: "); Serial.println(rf69.lastRssi(), DEC);
+
+     // echo last button       
+     data[0] = 'z';
+     // Send a reply back to the originator client
+     if (!rf69_manager.sendtoWait(data, sizeof(data), from))
+       Serial.println("sendtoWait failed");
+   }        
+ }
+}
+
+// Interrupt routines for rotary decoder
+void int0()
+{
+  if ( micros() - int0time < threshold )
+    return;
+  int0history = int0signal;
+  int0signal = REG_PORT_IN0 & PORT_PA18;
+  if ( int0history == int0signal )
+    return;
+  int0time = micros();
+  if ( int0signal == int1signal )
+    rotaryHalfSteps++;
+  else
+    rotaryHalfSteps--;
+}
+
+void int1()
+{
+  if ( micros() - int1time < threshold )
+    return;
+  int1history = int1signal;
+  int1signal = (REG_PORT_IN0 & PORT_PA19);
+  if ( int1history == int1signal )
+    return;
+  int1time = micros();
+}

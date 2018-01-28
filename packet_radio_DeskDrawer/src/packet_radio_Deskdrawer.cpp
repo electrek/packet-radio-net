@@ -20,11 +20,14 @@
 void Blink(byte PIN, byte DELAY_MS, byte loops);
 void secondTick();
 void runActuatorCheck();
+void sendMsg();
+void checkMsg();
 
 // Actions
 #define IDLE 0
 #define CLOSING 1
 #define OPENING 2
+#define STOPPING 3
 // States
 #define UNKNOWN 0
 #define CLOSED 1
@@ -34,8 +37,8 @@ uint8_t actuatorAction = IDLE;
 uint8_t actuatorCount = 0;
 uint8_t actuatorState = UNKNOWN;
 
-char* actuatorActionStr[8] = {"IDLE", "CLOSING", "OPENING"};
-char* actuatorStateStr[8] = {"UNKNOWN", "CLOSED", "OPEN"};
+const char* actuatorActionStr[8] = {"IDLE", "CLOSING", "OPENING", "STOPPING"};
+const char* actuatorStateStr[8] = {"UNKNOWN", "CLOSED", "OPEN"};
 
 // Create the motor shield object with the default I2C address
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
@@ -163,36 +166,41 @@ void loop()
 			{
 				case 'I' :
 					Serial.println("case I, Open drawer");
-					//do something for command "A"
+					//do something for command "I"
 					myMotor->run(BACKWARD);  //open drawer
 					actuatorAction = OPENING;
 					actuatorState = UNKNOWN;
-					actuatorCount = 8;
-					//delay(8000);
-					//myMotor->run(RELEASE);
+					actuatorCount = 10;
 					break;
 				case 'J' :
 					Serial.println("case J, Close drawer");
-					//do something for command "B"
+					//do something for command "J"
 					myMotor->run(FORWARD);   //close drawer
 					actuatorAction = CLOSING;
 					actuatorState = UNKNOWN;
-					actuatorCount = 8;
-					//delay(8000);
-					//myMotor->run(RELEASE);
+					actuatorCount = 10;
 					break;
-				case 'C' :
-					//do something for command "C"
+				case 'K' :
+					Serial.println("case K, STOP");
+					//do something for command "K"
+					myMotor->run(RELEASE);   //STOP
+					actuatorAction = STOPPING;
+					actuatorState = UNKNOWN;
+					actuatorCount = 0;
+					//do something for command "K"
 					break;
 				default:
 					Serial.println("default");
 					// do the default
 					break;
 			}
-		
-
+			len = strlen(actuatorActionStr[actuatorAction]);
+			Serial.print("len = ");
+			Serial.println(len);
+			memcpy(data, actuatorActionStr[actuatorAction], len);
+			data[len] = 0;
 			// Send a reply back to the originator client
-			if (!rf69_manager.sendtoWait(data, sizeof(data), from))
+			if (!rf69_manager.sendtoWait(data, len, from))
 				Serial.println("Sending failed (no ack)");
 		}
 	}
@@ -246,4 +254,14 @@ void runActuatorCheck()
 			myMotor->run(RELEASE);
 		}
 	}
+}
+
+void sendMsg()
+{
+
+}
+
+void checkMsg()
+{
+	
 }
