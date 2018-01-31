@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "gdb",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "name": "PlatformIO Debugger",
+            "target": "c:/Users/elect/Documents/PlatformIO/Projects/packet-radio-net/packet_radio_Chessboard/.pioenvs/adafruit_feather_m0/firmware.elf",
+            "gdbpath": "C:/Users/elect/.platformio/penv/Scripts/piodebuggdb",
+            "autorun": [ "source .pioinit" ],
+            "preLaunchTask": "PlatformIO: Pre-Debug"
+        }
+    ]
+}
