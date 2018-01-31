@@ -113,29 +113,27 @@ int menuList[8]={1,2,3,4,5,6,7,8}; //for rotary encoder choices
 int m = 0; //variable to increment through menu list
 int lastTB[8] = {16, 16, 16, 16, 16, 16, 16, 16}; //array to store per-menu Trellis button
 const char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
-const char* menuSubListStr[8][16] =  {{"ON", "OFF", "FORWARD", "REVERSE", "PAUSE", "", "", "", "", "", "", "", "", "", "", ""},
-                                      {"Queen Activate", "Knight Activate", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                                      {"OPEN", "CLOSE", "STOP", "", "", "", "", "", "", "", "", "", "", "", "", ""},
-                                      {"ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+const char* menuSubListStr[8][16] =  {{"Send Status", "Play #1", "Play #2", "Play #3", "PAUSE", "VOL UP", "VOL DN", "", "", "", "", "", "", "", "", ""},
+                                      {"Send status", "Send signal", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Send status", "STOP", "Open drawer", "Close drawer", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Send status", "ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""}};
-const char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'F', 'G', 'H', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'I', 'J', 'K', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'K', 'L', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'M', 'N', 'O', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'P', 'Q', 'R', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'S', 'T', 'U', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'V', 'W', 'X', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
+const char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 int16_t lastRSSI = 0;
 
 #define VBATPIN A7
-#define HALLEFFECT A0
 float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
-// float measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
 
 void setup() 
 {
@@ -218,7 +216,7 @@ void setup()
   oled.display();
 
     // light up all the LEDs in order
-    for (uint8_t i=0; i<numKeys; i++) {
+    for (uint8_t i=numKeys; i>0; i--) {
       trellis.setLED(i);
       trellis.writeDisplay();    
       delay(30);
@@ -267,18 +265,6 @@ void loop()
          m--;
          m = (m+MENU_LENGTH) % MENU_LENGTH;
       }
-      #ifdef DEBUG
-      Serial.print("Diff = ");
-      Serial.print(diff);
-      Serial.print("  pos= ");
-      Serial.print(pos);
-      Serial.print(", newPos=");
-      Serial.println(newPos);
-      Serial.println(menuList[m]);
-      Serial.print("m is: ");
-      Serial.println(m);
-      #endif
-
       pos = newPos;
 
       //clear Trellis lights 
@@ -305,10 +291,6 @@ void loop()
 //  Serial.print("VBat: " );
 //	Serial.println(measuredvbat);
 //	Serial.print(" ");
-// measuredhall = analogRead(HALLEFFECT)*5.0/3.0*3.3/1024;
-//  Serial.print("HallEffect: " );
-//	Serial.print(measuredhall);
-//	Serial.print(" ");
 
 // remember that the switch is active low
   int buttonState = digitalRead(PIN_ENCODER_SWITCH);
@@ -333,29 +315,6 @@ void loop()
   }
 
 /*************Trellis Button Presses***********/
-  if (MODE == MOMENTARY)
-  {
-    if (trellis.readSwitches())
-    { // If a button was just pressed or released...
-      for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
-      { // go through every button
-        if (trellis.justPressed(ikeys)) 
-        { // if it was pressed, turn it on
-        //Serial.print("v"); Serial.println(i);
-          trellis.setLED(ikeys);
-        } 
-        if (trellis.justReleased(ikeys))
-        { // if it was released, turn it off
-          //Serial.print("^"); Serial.println(i);
-          trellis.clrLED(ikeys);
-        }
-      }
-      trellis.writeDisplay(); // tell the trellis to set the LEDs we requested
-    }
-  }
-
-  if (MODE == LATCHING)
-  {
     if (trellis.readSwitches())
     { // If a button was just pressed or released...
       for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
@@ -383,21 +342,17 @@ void loop()
             trellis.writeDisplay();
           }
 
-         checkMsg();
-
-
-
-              char radiopacket[20];
-              
+          checkMsg();
+          char radiopacket[20];
 
           //check the rotary encoder menu choice
       
-          radiopacket[0] = menuCmdStr[m][ikeys];
+          radiopacket[0] = menuCmdStr[m][16-ikeys];  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
           oled.clearDisplay();
           oled.setCursor(0,0);
           oled.print(menuListStr[m]);
           oled.setCursor(0,16);
-          oled.print(menuSubListStr[m][ikeys]);
+          oled.print(menuSubListStr[m][16-ikeys]);  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
           oled.display();  
 
           Serial.print("Sending "); 
@@ -405,11 +360,6 @@ void loop()
           Serial.print("to ");
           Serial.println(rxAddresses[m]);
 
-      //  rf69.send((uint8_t *)radiopacket, strlen(radiopacket));
-      //  rf69.waitPacketSent(); 
-          //reset packet so unassigned buttons don't send last command
-      //    radiopacket[0]='z'; //also being used to turn off NeoPixels 
-          //from any unused button
 
       sendMsg(radiopacket,rxAddresses[m]);
 
@@ -420,7 +370,6 @@ void loop()
       // tell the trellis to set the LEDs we requested
       trellis.writeDisplay();
     }
-  }
 }
 
 

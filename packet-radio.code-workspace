@@ -1,16 +1,7 @@
 {
 	"folders": [
 		{
-			"path": "packet_radio_TX"
-		},
-		{
-			"path": "packet_radio_DeskDrawer"
-		},
-		{
 			"path": "packet_radio_Chessboard"
-		},
-		{
-			"path": "packet_radio_Radio"
 		}
 	],
 	"settings": {

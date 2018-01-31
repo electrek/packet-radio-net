@@ -14,48 +14,34 @@
 #include <RH_RF69.h>
 #include <RHReliableDatagram.h>
 #include <Wire.h>
-#include <Adafruit_MotorShield.h>
-#include "utility/Adafruit_MS_PWMServoDriver.h"
 
 void Blink(byte PIN, byte DELAY_MS, byte loops);
 void secondTick();
-void runActuatorCheck();
 void sendStatus();
 void checkMsg();
+void sendMsg(char* radiopacket, uint8_t address);
 
 // Actions
 #define IDLE 0
-#define CLOSING 1
-#define OPENING 2
-#define STOPPING 3
+#define SEND_SIGNAL 1
 // States
-#define UNKNOWN 0
-#define CLOSED 1
-#define OPEN 2
+#define QUEEN_NOMATCH_KING_NOMATCH 0
+#define QUEEN_MATCH_KING_NOMATCH 1
+#define QUEEN_NOMATCH_KING_MATCH 2
+#define QUEEN_MATCH_KING_MATCH 3
 
-uint8_t actuatorAction = IDLE;
-uint8_t actuatorCount = 0;
-uint8_t actuatorState = UNKNOWN;
+uint8_t action = IDLE;
+uint8_t state = QUEEN_NOMATCH_KING_NOMATCH;
 
-const char* actuatorActionStr[8] = {"IDLE", "CLOSING", "OPENING", "STOPPING"};
-const char* actuatorStateStr[8] = {"UNKNOWN", "CLOSED", "OPEN"};
-
-// Create the motor shield object with the default I2C address
-Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-// Or, create it with a different I2C address (say for stacking)
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
-
-// Select which 'port' M1, M2, M3 or M4. In this case, M1
- Adafruit_DCMotor *myMotor = AFMS.getMotor(1);
-// You can also make another motor on port M2
-//Adafruit_DCMotor *myOtherMotor = AFMS.getMotor(2);
+const char* actionStr[8] = {"IDLE", "SEND_SIGNAL"};
+const char* stateStr[8] = {"QUEEN_NOMATCH_KING_NOMATCH", "QUEEN_MATCH_KING_NOMATCH", "QUEEN_NOMATCH_KING_MATCH", "QUEEN_MATCH_KING_MATCH"};
 
 /************ Radio Setup ***************/
 // Change to 434.0 or other frequency, must match RX's freq!
 #define RF69_FREQ 915.0
 
 // who am i? (server address)
-#define MY_ADDRESS     3
+#define MY_ADDRESS     2
 
 #if defined(ARDUINO_SAMD_FEATHER_M0) // Feather M0 w/Radio
   #define RFM69_CS      8
@@ -71,19 +57,18 @@ RH_RF69 rf69(RFM69_CS, RFM69_INT);
 RHReliableDatagram rf69_manager(rf69, MY_ADDRESS);
 
 int16_t packetnum = 0;  // packet counter, we increment per xmission
+int16_t lastRSSI = 0;
 #define VBATPIN A7
+#define HALLEFFECT1 A0
+#define HALLEFFECT2 A1
 float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
+float measuredhall1 = analogRead(HALLEFFECT1)*5.0/3.0*3.3/1024;
+float measuredhall2 = analogRead(HALLEFFECT2)*5.0/3.0*3.3/1024;
 
 void setup() 
 {
 	Serial.begin(115200);
 	//while (!Serial) { delay(1); } // wait until serial console is open, remove if not tethered to computer
-
-	AFMS.begin();  // create with the default frequency 1.6KHz
-	//AFMS.begin(1000);  // OR with a different frequency, say 1KHz
-  
-  // Set the speed to start, from 0 (off) to 255 (max speed)
-	myMotor->setSpeed(255);	
 
 	pinMode(LED, OUTPUT);     
 	pinMode(RFM69_RST, OUTPUT);
@@ -130,6 +115,7 @@ unsigned long ul_PreviousMillis = millis();
 uint8_t data[] = "And hello back to you";
 // Dont put this on the stack:
 uint8_t buf[RH_RF69_MAX_MESSAGE_LEN];
+char radiopacket[20] = "Hello World #";
 
 void loop()
 {
@@ -160,38 +146,24 @@ void loop()
 					sendStatus();
 					break;
 				case 'B' :
-					Serial.println("case B, STOP");
+					Serial.println("case B, Send signal");
 					//do something for command "B"
-					myMotor->run(RELEASE);   //STOP
-					actuatorAction = STOPPING;
-					actuatorState = UNKNOWN;
-					actuatorCount = 0;
+					 radiopacket[0] = 'C';
+					 sendMsg(radiopacket,3);  //"Open" command is 'C', desk drawer address is 3
 					break;
 				case 'C' :
-					Serial.println("case C, Open drawer");
+					Serial.println("case C, RESET");
 					//do something for command "C"
-					myMotor->run(BACKWARD);  //open drawer
-					actuatorAction = OPENING;
-					actuatorState = UNKNOWN;
-					actuatorCount = 10;
-					break;
-				case 'D' :
-					Serial.println("case D, Close drawer");
-					//do something for command "D"
-					myMotor->run(FORWARD);   //close drawer
-					actuatorAction = CLOSING;
-					actuatorState = UNKNOWN;
-					actuatorCount = 10;
 					break;
 				default:
 					Serial.println("default");
 					// do the default
 					break;
 			}
-			len = strlen(actuatorActionStr[actuatorAction]);
+			len = strlen(actionStr[action]);
 			Serial.print("len = ");
 			Serial.println(len);
-			memcpy(data, actuatorActionStr[actuatorAction], len);
+			memcpy(data, actionStr[action], len);
 			data[len] = 0;
 			// Send a reply back to the originator client
 			if (!rf69_manager.sendtoWait(data, len, from))
@@ -217,38 +189,19 @@ void secondTick()
 	unsigned long ul_CurrentMillis = millis();
 	if ((ul_CurrentMillis - ul_PreviousMillis >= ul_1secIntervalMillis))
 	{
-		runActuatorCheck();
 		measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 		Serial.print("VBat: " );
 		Serial.println(measuredvbat);
+		measuredhall1 = analogRead(HALLEFFECT1)*5.0/3.0*3.3/1024;
+		Serial.print("VHall1: " );
+		Serial.println(measuredhall1);
+		measuredhall2 = analogRead(HALLEFFECT2)*5.0/3.0*3.3/1024;
+		Serial.print("VHall2: " );
+		Serial.println(measuredhall2);
 		ul_PreviousMillis = ul_CurrentMillis;
 	}
 }
 
-void runActuatorCheck()
-{
-	Serial.print("Actuator State is ");
-	Serial.println(actuatorStateStr[actuatorState]);
-	Serial.print("Actuator Action is ");
-	Serial.println(actuatorActionStr[actuatorAction]);
-	if (actuatorAction != IDLE)  // actuator is either OPENING or CLOSING
-	{
-		actuatorCount--;
-		if (actuatorCount==0)
-		{
-			if (actuatorAction==CLOSING)  // if closing completed, actuator state is closed
-				{
-					actuatorState = CLOSED;
-				}
-				if (actuatorAction==OPENING)  // if closing completed, actuator state is closed
-				{
-					actuatorState = OPEN;
-				}
-			actuatorAction = IDLE;
-			myMotor->run(RELEASE);
-		}
-	}
-}
 
 void sendStatus()
 {
@@ -258,4 +211,38 @@ void sendStatus()
 void checkMsg()
 {
 	
+}
+
+void sendMsg(char* radiopacket, uint8_t address)
+{
+  // Send a message to the DESTINATION!
+  if (rf69_manager.sendtoWait((uint8_t *)radiopacket, strlen(radiopacket), address))
+  {
+    // Now wait for a reply from the server
+    uint8_t len = sizeof(buf);
+    uint8_t from;   
+    if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
+    {
+      buf[len] = 0; // zero out remaining string
+    
+      Serial.print("Got reply from #"); Serial.println(from);
+      Serial.print("Reply:"); Serial.println((char*)buf);
+      Serial.print(" [RSSI :");
+      lastRSSI = rf69.lastRssi();
+      Serial.println(lastRSSI);
+      
+    // Serial.print("] : ");
+    // Serial.println((char*)buf);     
+      Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+    }
+    else
+    {
+      Serial.println("No reply, is anyone listening?");
+    }
+  }
+  else
+  {
+    Serial.println("Sending failed (no ack)");
+    lastRSSI = 0;
+  }
 }
