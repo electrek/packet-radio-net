@@ -23,6 +23,10 @@ void sendMsg(char* radiopacket, uint8_t address);
 void checkMsg();
 void int0();
 void int1();
+void checkPos();
+void refreshUI();
+void checkRotaryButton();
+int checkTrellisButtons();
 
 /********* Encoder Setup ***************/
 #define PIN_ENCODER_SWITCH 11
@@ -64,7 +68,7 @@ Adafruit_SSD1306 oled = Adafruit_SSD1306();
 #define RF69_FREQ 915.0
 
 // change addresses for each client board, any number :)
-#define MY_ADDRESS 1
+#define MY_ADDRESS 0
 #define Radio_ADDRESS 1
 #define Chessboard_ADDRESS 2
 #define DeskDrawer_ADDRESS 3
@@ -109,26 +113,25 @@ RHReliableDatagram rf69_manager(rf69, MY_ADDRESS);
 
 int lastButton=17; //last button pressed for Trellis logic
 
-int menuList[8]={1,2,3,4,5,6,7,8}; //for rotary encoder choices
 int m = 0; //variable to increment through menu list
 int lastTB[8] = {16, 16, 16, 16, 16, 16, 16, 16}; //array to store per-menu Trellis button
-const char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Other1", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
+const char* menuListStr[8] = {"Radio", "Chessboard", "DeskDrawer", "Lights", "Status", "Other2", "Other3", "Other4"};  // menu options align with different RX's (and RX addresses)
 const char* menuSubListStr[8][16] =  {{"Send Status", "Play #1", "Play #2", "Play #3", "PAUSE", "VOL UP", "VOL DN", "", "", "", "", "", "", "", "", ""},
                                       {"Send status", "Send signal", "RESET", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Send status", "STOP", "Open drawer", "Close drawer", "", "", "", "", "", "", "", "", "", "", "", ""},
-                                      {"Send status", "ON", "OFF", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+                                      {"Next screen", "Previous screen", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""},
                                       {"Action1", "Action2", "Action3", "", "", "", "", "", "", "", "", "", "", "", "", ""}};
 const char menuCmdStr[8][16] = {{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
                                 {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
-                                {'A', 'B', 'C', 'D', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
+                                {'A', 'B', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'},
+                                {'A', 'B', 'C', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z', 'z'}};
 int16_t packetnum = 0;  // packet counter, we increment per xmission
 int16_t lastRSSI = 0;
 
@@ -239,11 +242,68 @@ void loop()
 {
   delay(30); // 30ms delay is required, dont remove me! (Trellis)
   checkMsg();
-      /*************Rotary Encoder Menu***********/
+  checkPos();  // check position of rotary encoder and increment/decrement m (menu level) appropriately
+  refreshUI();  
+  checkRotaryButton();
+  lastButton = checkTrellisButtons();
+  Serial.print("lastButton = ");
+  Serial.println(lastButton);
+
+  if (lastButton < 16)
+  {
+    char radiopacket[20];
+    radiopacket[0] = menuCmdStr[m][15-lastTB[m]];  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
+    oled.clearDisplay();
+    oled.setCursor(6,0);
+    oled.print(menuListStr[m]);
+    oled.setCursor(0,16);
+    oled.print(menuSubListStr[m][15-lastTB[m]]);  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
+    oled.display();  
+
+    if (radiopacket[0]!='z')
+    {
+      Serial.print("Sending "); 
+      Serial.println(radiopacket[0]);
+      Serial.print("to ");
+      Serial.println(rxAddresses[m]);
+      sendMsg(radiopacket,rxAddresses[m]);
+    }
+  }
+}
+
+void refreshUI()
+{
+    //clear Trellis lights 
+  for(int t=0;t<=16;t++)
+  {
+    if (lastTB[m]!=t)
+    {
+      trellis.clrLED(t);
+     // trellis.writeDisplay();
+    }
+  }
+  //light last saved light for current menu
+ // trellis.clrLED(lastTB[m]);
+  trellis.setLED(lastTB[m]);
+  trellis.writeDisplay();
+  
+  //write to the display
+  oled.clearDisplay();
+  oled.fillRect(0, (m)*4, 4, 4, WHITE);
+  //oled.circleFill(3,(m+1)*5,2);
+  oled.setCursor(6,0);
+  oled.print(menuListStr[m]);
+  oled.display();
+}
+
+
+void checkPos()
+{
+        /*************Rotary Encoder Menu***********/
     //check the encoder knob, set the current position as origin
     //long newPos = knob.read() / 4;//divide for encoder detents --> this is used with Encoder lib
 
-    long newPos = rotaryHalfSteps / 2;  //rotaryHalfSteps is updated in ISR
+    long newPos = rotaryHalfSteps;  //rotaryHalfSteps is updated in ISR
     #ifdef DEBUG
       Serial.print("pos=");
       Serial.print(pos);
@@ -255,43 +315,60 @@ void loop()
       int diff = newPos - pos;//check the different between old and new position
       if(diff>=1)
       {
-        m++; 
+        m--; 
         m = (m+MENU_LENGTH) % MENU_LENGTH;//modulo to roll over the m variable through the list size
       }
 
       if(diff<=-1)
       { //rotating backwards
-         m--;
+         m++;
          m = (m+MENU_LENGTH) % MENU_LENGTH;
       }
       pos = newPos;
-
-      //clear Trellis lights 
-      for(int t=0;t<=16;t++)
-      {
-        trellis.clrLED(t);
-        trellis.writeDisplay();
-      }
-      //light last saved light for current menu
-        trellis.clrLED(lastTB[m]);
-        trellis.setLED(lastTB[m]);
-        trellis.writeDisplay();
-      
-      //write to the display
-      oled.clearDisplay();
-      oled.fillRect(0, (m)*4, 4, 4, WHITE);
-      //oled.circleFill(3,(m+1)*5,2);
-      oled.setCursor(6,2);
-      oled.print(menuListStr[m]);
-      oled.display();
     }
+}
 
-  measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
-//  Serial.print("VBat: " );
-//	Serial.println(measuredvbat);
-//	Serial.print(" ");
+int checkTrellisButtons()
+{
+/*************Trellis Button Presses***********/
+  if (trellis.readSwitches())
+  { // If a button was just pressed or released...
+    for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
+    { // go through every button
+      if (trellis.justPressed(ikeys))
+      { // if it was pressed...
+      //Serial.print("v"); Serial.println(ikeys);
 
-// remember that the switch is active low
+      // Alternate the LED unless the same button is pressed again
+      //if(ikeys!=lastButton){
+        if(ikeys!=lastTB[m])
+        { 
+          if (trellis.isLED(ikeys))
+          {
+              trellis.clrLED(ikeys);
+              lastTB[m]=ikeys; //set the stored value for menu changes
+          }
+          else
+          {
+            trellis.setLED(ikeys);
+            //trellis.clrLED(lastButton);//turn off last one
+            trellis.clrLED(lastTB[m]);
+            lastTB[m]=ikeys; //set the stored value for menu changes
+          }
+          trellis.writeDisplay();
+          return ikeys;
+        }
+      }
+    }
+    // tell the trellis to set the LEDs we requested
+    trellis.writeDisplay();
+  }
+  return 17;
+}
+
+void checkRotaryButton()
+{
+  // remember that the switch is active low
   int buttonState = digitalRead(PIN_ENCODER_SWITCH);
   if (buttonState == LOW)
   {
@@ -313,63 +390,7 @@ void loop()
     prevButtonState = buttonState;
   }
 
-/*************Trellis Button Presses***********/
-    if (trellis.readSwitches())
-    { // If a button was just pressed or released...
-      for (uint8_t ikeys=0; ikeys<numKeys; ikeys++)
-      { // go through every button
-        if (trellis.justPressed(ikeys))
-        { // if it was pressed...
-        //Serial.print("v"); Serial.println(ikeys);
-
-        // Alternate the LED unless the same button is pressed again
-        //if(ikeys!=lastButton){
-          if(ikeys!=lastTB[m])
-          { 
-            if (trellis.isLED(ikeys))
-            {
-                trellis.clrLED(ikeys);
-                lastTB[m]=ikeys; //set the stored value for menu changes
-            }
-            else
-            {
-              trellis.setLED(ikeys);
-              //trellis.clrLED(lastButton);//turn off last one
-              trellis.clrLED(lastTB[m]);
-              lastTB[m]=ikeys; //set the stored value for menu changes
-            }
-            trellis.writeDisplay();
-          }
-
-          char radiopacket[20];
-
-          //check the rotary encoder menu choice
-      
-          radiopacket[0] = menuCmdStr[m][16-ikeys];  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
-          oled.clearDisplay();
-          oled.setCursor(0,0);
-          oled.print(menuListStr[m]);
-          oled.setCursor(0,16);
-          oled.print(menuSubListStr[m][16-ikeys]);  // need to reverse ikeys sequence due to keypad being installed in reverse position (hence 16-keys)
-          oled.display();  
-
-          Serial.print("Sending "); 
-          Serial.println(radiopacket[0]);
-          Serial.print("to ");
-          Serial.println(rxAddresses[m]);
-
-
-      sendMsg(radiopacket,rxAddresses[m]);
-
-      //		update_page();
-           
-        }
-    }
-      // tell the trellis to set the LEDs we requested
-      trellis.writeDisplay();
-    }
 }
-
 
 void Blink(byte PIN, byte DELAY_MS, byte loops)
 {
@@ -384,26 +405,30 @@ void Blink(byte PIN, byte DELAY_MS, byte loops)
 
 void update_page()
 {
+   
     oled.clearDisplay();            // Clear the display
-    oled.setCursor(0, 0);        // Set cursor to top-left
+    oled.setCursor(6,0);
+    oled.print(menuListStr[m]);
+   // oled.setCursor(0, 0);        // Set cursor to top-left
     //oled.setFont(0);         // Smallest font
-    oled.print("VBAT: ");       // Print "VBATT:"
-    oled.print(measuredvbat);    // Print VBATT reading
+   // oled.print("VBAT: ");
+   // oled.print(measuredvbat);    // Print VBATT reading
     oled.setCursor(0, 16);       // Set cursor to top-middle-left
    // oled.setFont(0);         // Repeat
     if (lastRSSI==0)
     {
-        oled.print("no ack");
+        oled.print("Msg failed! :(");
     }
     else
     {
-        oled.print("RSSI: ");
-        oled.print(lastRSSI);
+        oled.print("Success!");
+       // oled.print(lastRSSI);
     }
-	oled.setCursor(0, 32);
-//	oled.print("HALL: ");       // Print "HALL:"
-//    oled.print(measuredhall);    // Print HallEffect reading
+//	oled.setCursor(0, 32);
+//	oled.print("HALL: ");
+//    oled.print(measuredhall);
     oled.display();
+    delay(500);
 }
 
 void sendMsg(char* radiopacket, uint8_t address)
@@ -438,6 +463,7 @@ void sendMsg(char* radiopacket, uint8_t address)
     Serial.println("Sending failed (no ack)");
     lastRSSI = 0;
   }
+  update_page();
 }
 
 void checkMsg()
