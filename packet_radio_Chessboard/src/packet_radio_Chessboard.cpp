@@ -21,6 +21,7 @@ void sendStatus();
 void checkMsg();
 void sendMsg(char* radiopacket, uint8_t address);
 
+#define DEBUG
 // Actions
 #define IDLE 0
 #define SEND_SIGNAL 1
@@ -61,9 +62,13 @@ int16_t lastRSSI = 0;
 #define VBATPIN A7
 #define HALLEFFECT1 A0
 #define HALLEFFECT2 A1
+#define HALLEFFECT3 A2
+#define HALLEFFECT4 A3
 float measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
-float measuredhall1 = analogRead(HALLEFFECT1)*5.0/3.0*3.3/1024;
-float measuredhall2 = analogRead(HALLEFFECT2)*5.0/3.0*3.3/1024;
+int measuredhall1 = analogRead(HALLEFFECT1);
+int measuredhall2 = analogRead(HALLEFFECT2);
+int measuredhall3 = analogRead(HALLEFFECT3);
+int measuredhall4 = analogRead(HALLEFFECT4);
 
 void setup() 
 {
@@ -126,6 +131,7 @@ void loop()
 		// Wait for a message addressed to us from the client
     	uint8_t len = sizeof(buf);
     	uint8_t from;
+		char fPointer[40];
 		if (rf69_manager.recvfromAck(buf, &len, &from))
 		{
 			buf[len] = 0; // zero out remaining string
@@ -143,28 +149,52 @@ void loop()
 				case 'A' :
 					Serial.println("case A, Send status");
 					//do something for command "A"
-					sendStatus();
+					sprintf(fPointer, "HALL1 = %d, HALL2 = %d, HALL3 = %d, HALL4 = %d", measuredhall1,measuredhall2,measuredhall3,measuredhall4);
+					len = strlen(fPointer);
+					memcpy(data, fPointer, len);
+					data[len] = 0;
+					Serial.print("len = ");
+					Serial.println(len);
+
+					//sendStatus();
 					break;
 				case 'B' :
 					Serial.println("case B, Send signal");
 					//do something for command "B"
 					 radiopacket[0] = 'C';
 					 sendMsg(radiopacket,3);  //"Open" command is 'C', desk drawer address is 3
+					len = strlen(actionStr[action]);
+					memcpy(data, actionStr[action], len);
+					data[len] = 0;
 					break;
 				case 'C' :
 					Serial.println("case C, RESET");
 					//do something for command "C"
+					len = strlen(actionStr[action]);
+					memcpy(data, actionStr[action], len);
+					data[len] = 0;
 					break;
 				default:
 					Serial.println("default");
 					// do the default
+					len = strlen(actionStr[action]);
+					memcpy(data, actionStr[action], len);
+					data[len] = 0;
 					break;
 			}
-			len = strlen(actionStr[action]);
-			Serial.print("len = ");
-			Serial.println(len);
-			memcpy(data, actionStr[action], len);
-			data[len] = 0;
+			#ifdef DEBUG
+				Serial.print("Response to ");
+				Serial.print(from);
+				Serial.println(": ");
+				for (int i=0; i<len; i++)
+					{
+						Serial.print((char)data[i]);
+					}
+				Serial.println("");
+			#endif
+		//	len = strlen(actionStr[action]);
+		//	memcpy(data, actionStr[action], len);
+		//	data[len] = 0;
 			// Send a reply back to the originator client
 			if (!rf69_manager.sendtoWait(data, len, from))
 				Serial.println("Sending failed (no ack)");
@@ -192,12 +222,18 @@ void secondTick()
 		measuredvbat = analogRead(VBATPIN)*2.0*3.3/1024;
 		Serial.print("VBat: " );
 		Serial.println(measuredvbat);
-		measuredhall1 = analogRead(HALLEFFECT1)*5.0/3.0*3.3/1024;
+		measuredhall1 = analogRead(HALLEFFECT1);
 		Serial.print("VHall1: " );
 		Serial.println(measuredhall1);
-		measuredhall2 = analogRead(HALLEFFECT2)*5.0/3.0*3.3/1024;
+		measuredhall2 = analogRead(HALLEFFECT2);
 		Serial.print("VHall2: " );
 		Serial.println(measuredhall2);
+		measuredhall3 = analogRead(HALLEFFECT3);
+		Serial.print("VHall3: " );
+		Serial.println(measuredhall3);
+		measuredhall4 = analogRead(HALLEFFECT4);
+		Serial.print("VHall4: " );
+		Serial.println(measuredhall4);
 		ul_PreviousMillis = ul_CurrentMillis;
 	}
 }
